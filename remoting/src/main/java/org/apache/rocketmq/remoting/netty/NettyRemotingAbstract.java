@@ -58,20 +58,16 @@ public abstract class NettyRemotingAbstract {
      * Remoting logger instance.
      */
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
-
-    /**
-     * Semaphore to limit maximum number of on-going one-way requests, which protects system memory footprint.
-     */
+    
+    /** 发送请求时: 控制 单向请求的 并发量. **/
     protected final Semaphore semaphoreOneway;
 
-    /**
-     * Semaphore to limit maximum number of on-going asynchronous requests, which protects system memory footprint.
-     */
+    /** 发送请求时: 控制 异步请求的 并发量. **/
     protected final Semaphore semaphoreAsync;
 
     /**
-     * 存放 正在处理的请求 的响应结果.
-     * 客户端 发起请求时, 以 请求Id 为 Key, 将 请求对应的响应 加入进去.
+     * 发送请求时, 存放 该请求 的 响应结果.
+     * Key为请求Id.
      *
      * 注: 想想 Dubbo 的 DefaultFuture.
      */
@@ -82,17 +78,20 @@ public abstract class NettyRemotingAbstract {
      * This container holds all processors per request code, aka, for each incoming request, we may look up the
      * responding processor in this map to handle the request.
      */
-    protected final HashMap<Integer/* request code */, Pair<NettyRequestProcessor, ExecutorService>> processorTable =
+    /**
+     * 请求处理器映射表.
+     * Key: 请求Id, Value: 处理器及调度器
+     */
+    protected final HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>> processorTable =
         new HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>>(64);
 
-    /**
-     * Executor to feed netty events to user defined {@link ChannelEventListener}.
-     */
+    /** Netty事件监听线程池. **/
     protected final NettyEventExecutor nettyEventExecutor = new NettyEventExecutor();
 
     /**
      * The default request processor to use in case there is no exact match in {@link #processorTable} per request code.
      */
+    /** 默认的请求处理器对: 进来的请求没有找到对应处理器对 时, 使用该默认的. **/
     protected Pair<NettyRequestProcessor, ExecutorService> defaultRequestProcessor;
 
     /**

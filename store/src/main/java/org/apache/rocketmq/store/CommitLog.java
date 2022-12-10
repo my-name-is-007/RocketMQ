@@ -125,6 +125,7 @@ public class CommitLog {
         this.flushCommitLogService.shutdown();
     }
 
+    /** 交由 MappedFile队列 commit及flush. **/
     public long flush() {
         this.mappedFileQueue.commit(0);
         this.mappedFileQueue.flush(0);

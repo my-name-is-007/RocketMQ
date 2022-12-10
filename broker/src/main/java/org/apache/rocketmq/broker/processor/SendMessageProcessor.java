@@ -246,9 +246,8 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
     }
 
 
-    private CompletableFuture<RemotingCommand> asyncSendMessage(ChannelHandlerContext ctx, RemotingCommand request,
-                                                                SendMessageContext mqtraceContext,
-                                                                SendMessageRequestHeader requestHeader) {
+    private CompletableFuture<RemotingCommand> asyncSendMessage(
+            ChannelHandlerContext ctx, RemotingCommand request, SendMessageContext mqtraceContext, SendMessageRequestHeader requestHeader) {
         final RemotingCommand response = preSend(ctx, request, requestHeader);
         final SendMessageResponseHeader responseHeader = (SendMessageResponseHeader)response.readCustomHeader();
 

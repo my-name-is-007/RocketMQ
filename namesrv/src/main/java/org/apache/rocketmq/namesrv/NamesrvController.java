@@ -74,31 +74,30 @@ public class NamesrvController {
     }
 
     public boolean initialize() {
-
+        //从文件中 加载 NameServer 配置到 configTable(Hashmap)
         this.kvConfigManager.load();
 
+        //初始化 Netty服务器
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
 
         this.remotingExecutor =
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
 
+        //核心—请求处理器: NameServer 处理网络请求的组件
         this.registerProcessor();
 
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
+        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
+                //心跳: 每隔10秒 扫描一次 broker
                 NamesrvController.this.routeInfoManager.scanNotActiveBroker();
             }
         }, 5, 10, TimeUnit.SECONDS);
 
-        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
-            @Override
-            public void run() {
-                NamesrvController.this.kvConfigManager.printAllPeriodically();
-            }
-        }, 1, 10, TimeUnit.MINUTES);
+        //定时输出信息
+        this.scheduledExecutorService.scheduleAtFixedRate(() ->
+                NamesrvController.this.kvConfigManager.printAllPeriodically(), 1, 10, TimeUnit.MINUTES);
 
         if (TlsSystemConfig.tlsMode != TlsMode.DISABLED) {
             // Register a listener to reload SslContext
@@ -143,15 +142,16 @@ public class NamesrvController {
 
     private void registerProcessor() {
         if (namesrvConfig.isClusterTest()) {
-
             this.remotingServer.registerDefaultProcessor(new ClusterTestRequestProcessor(this, namesrvConfig.getProductEnvName()),
                 this.remotingExecutor);
         } else {
-
+            //将DefaultRequestProcessor(NameServer的默认请求处理组件) 和 ExecutorService绑定
+            //Nettyserver收到的网络请求, 都由这个处理器处理
             this.remotingServer.registerDefaultProcessor(new DefaultRequestProcessor(this), this.remotingExecutor);
         }
     }
 
+    //启动Netty, 绑定、监听端口
     public void start() throws Exception {
         this.remotingServer.start();
 

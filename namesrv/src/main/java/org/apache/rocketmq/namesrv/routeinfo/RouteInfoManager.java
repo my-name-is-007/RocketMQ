@@ -49,11 +49,21 @@ public class RouteInfoManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
     private final static long BROKER_CHANNEL_EXPIRED_TIME = 1000 * 60 * 2;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final HashMap<String/* topic */, List<QueueData>> topicQueueTable;
-    private final HashMap<String/* brokerName */, BrokerData> brokerAddrTable;
-    private final HashMap<String/* clusterName */, Set<String/* brokerName */>> clusterAddrTable;
-    private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
-    private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
+
+    /** {主题: 队列信息的集合}: 一个topic有多个队列. **/
+    private final HashMap<String, List<QueueData>> topicQueueTable;
+
+    /** {brokerName: Broker信息}: 存储brokerName 与 真实地址的关系. **/
+    private final HashMap<String, BrokerData> brokerAddrTable;
+
+    /** {集群名: 集群下的broker名}. **/
+    private final HashMap<String, Set<String>> clusterAddrTable;
+
+    /** {broker地址: broker存活信息}: 用于心跳. **/
+    private final HashMap<String, BrokerLiveInfo> brokerLiveTable;
+
+    /** {brokerAddr: Filter Server集合}. **/
+    private final HashMap<String, List<String>> filterServerTable;
 
     public RouteInfoManager() {
         this.topicQueueTable = new HashMap<String, List<QueueData>>(1024);
@@ -426,11 +436,13 @@ public class RouteInfoManager {
         return null;
     }
 
+    /** 心跳：遍历brokerLiveTable, 移除长时间拿到最近一次心跳的BrokerLiveInfo. **/
     public void scanNotActiveBroker() {
         Iterator<Entry<String, BrokerLiveInfo>> it = this.brokerLiveTable.entrySet().iterator();
         while (it.hasNext()) {
             Entry<String, BrokerLiveInfo> next = it.next();
             long last = next.getValue().getLastUpdateTimestamp();
+            //两分钟没有收到心跳: broker可能挂掉了, 将连接移除掉
             if ((last + BROKER_CHANNEL_EXPIRED_TIME) < System.currentTimeMillis()) {
                 RemotingUtil.closeChannel(next.getValue().getChannel());
                 it.remove();
@@ -753,9 +765,15 @@ public class RouteInfoManager {
 }
 
 class BrokerLiveInfo {
+
+    /** 上次更新时间---用于判断是否存活. **/
     private long lastUpdateTimestamp;
     private DataVersion dataVersion;
+
+    /** broker---namesrv 通信的channel. **/
     private Channel channel;
+    
+    /** broker 的 master地址. **/
     private String haServerAddr;
 
     public BrokerLiveInfo(long lastUpdateTimestamp, DataVersion dataVersion, Channel channel,

@@ -33,14 +33,21 @@ public class KVConfigManager {
 
     private final NamesrvController namesrvController;
 
+    /** 读写锁提升性能: 配置信息一般读多写少. **/
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final HashMap<String/* Namespace */, HashMap<String/* Key */, String/* Value */>> configTable =
-        new HashMap<String, HashMap<String, String>>();
 
-    public KVConfigManager(NamesrvController namesrvController) {
-        this.namesrvController = namesrvController;
-    }
+    /**
+     * {
+     *     Namespace: {
+     *         K: V......
+     *     }
+     * }
+     */
+    private final HashMap<String, HashMap<String, String>> configTable = new HashMap<>();
 
+    public KVConfigManager(NamesrvController namesrvController) { this.namesrvController = namesrvController; }
+
+    /** 加载配置到 configTable. **/
     public void load() {
         String content = null;
         try {
@@ -58,6 +65,7 @@ public class KVConfigManager {
         }
     }
 
+    /** 放入配置: namespace ------> KV. **/
     public void putKVConfig(final String namespace, final String key, final String value) {
         try {
             this.lock.writeLock().lockInterruptibly();
@@ -84,9 +92,11 @@ public class KVConfigManager {
             log.error("putKVConfig InterruptedException", e);
         }
 
+        //持久化至本地
         this.persist();
     }
-
+    
+    /** configTable信息 保存到 本地文件. **/
     public void persist() {
         try {
             this.lock.readLock().lockInterruptibly();

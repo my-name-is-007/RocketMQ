@@ -31,6 +31,14 @@ import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ *
+ * 协议内容: https://img-blog.csdnimg.cn/img_convert/1cd7a80d8e1a9306a5544474aeb2ae2b.png
+ *     1. Header data:协议头，数据是序列化【fastjosn】后的json，json的每个key字段都是固定的，
+ *     2. body data:请求的二进制实际数据，例如发送消息的网络请求中，Body传输实际的消息内容。
+ *     3. Length:消息总长度
+ *     4. Header length:序列化类型&消息头长度，第一个字节表示序列化类型，后面三个自己表示消息头长度。
+ */
 public class RemotingCommand {
     public static final String SERIALIZE_TYPE_PROPERTY = "rocketmq.serialize.type";
     public static final String SERIALIZE_TYPE_ENV = "ROCKETMQ_SERIALIZE_TYPE";
@@ -69,17 +77,29 @@ public class RemotingCommand {
         }
     }
 
+    /** 请求类型. **/
     private int code;
     private LanguageCode language = LanguageCode.JAVA;
+
+    /** RocketMQ版本编号. **/
     private int version = 0;
+
+    /** 请求序号. **/
     private int opaque = requestId.getAndIncrement();
+
+    /** 标记请求是普通请求，还是无回应的请求. **/
     private int flag = 0;
+
+    /** 失败提示. **/
     private String remark;
+
+    /** 参数字段. **/
     private HashMap<String, String> extFields;
     private transient CommandCustomHeader customHeader;
 
     private SerializeType serializeTypeCurrentRPC = serializeTypeConfigInThisServer;
 
+    /** 解码时缓存的字节流. **/
     private transient byte[] body;
 
     protected RemotingCommand() {

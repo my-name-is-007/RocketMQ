@@ -78,12 +78,15 @@ public class DefaultMessageStore implements MessageStore {
 
     private final CleanConsumeQueueService cleanConsumeQueueService;
 
+    /** 负责读写IndexFile的服务. **/
     private final IndexService indexService;
 
     private final AllocateMappedFileService allocateMappedFileService;
 
+    /** 消息存储到commitLog后, MessageStore的接口调用就直接返回了: 后续由ReputMessageService将消息分发到ConsumeQueue 和 IndexService. **/
     private final ReputMessageService reputMessageService;
 
+    /** 负责将master-slave之间的消息数据同步. **/
     private final HAService haService;
 
     private final ScheduleMessageService scheduleMessageService;
@@ -102,6 +105,9 @@ public class DefaultMessageStore implements MessageStore {
     private final BrokerConfig brokerConfig;
 
     private volatile boolean shutdown = true;
+
+    //    1316 137 5358 刘女士
+    //
 
     private StoreCheckpoint storeCheckpoint;
 
@@ -221,7 +227,7 @@ public class DefaultMessageStore implements MessageStore {
      * @throws Exception
      */
     public void start() throws Exception {
-
+        //1、写lock 文件,尝试获取lock文件锁，保证磁盘上的文件只会被一个messageStore读写
         lock = lockFile.getChannel().tryLock(0, 1, false);
         if (lock == null || lock.isShared() || !lock.isValid()) {
             throw new RuntimeException("Lock failed,MQ already started");
@@ -279,15 +285,26 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         if (!messageStoreConfig.isEnableDLegerCommitLog()) {
+            //启动haService，数据主从同步的服务
             this.haService.start();
             this.handleScheduleMessageService(messageStoreConfig.getBrokerRole());
         }
-
+        //FlushConsumeQueueService 是一个单线程服务: 定时将consumeQueue文件的数据刷新到磁盘，周期由参数flushIntervalConsumeQueue设置，默认1sec
         this.flushConsumeQueueService.start();
         this.commitLog.start();
+
+        //消息存储指标统计服务，RT，TPS...
         this.storeStatsService.start();
 
+        //对于新的broker，初始化文件存储的目录
         this.createTempFile();
+
+        /**
+         * 启动定时任务.
+         *     1. 定时清理过期的commitLog、cosumeQueue和Index数据文件, 默认文件写满后会保存72小时
+         *     2. 定时自检commitLog和consumerQueue文件，校验文件是否完整。主要用于监控，不会做修复文件的动作。
+         *     3. 定时检查commitLog的Lock时长(因为在write或者flush时侯会lock)，如果lock的时间过长，则打印jvm堆栈，用于监控。
+         */
         this.addScheduleTask();
         this.shutdown = false;
     }
